@@ -1,98 +1,117 @@
-const PastebinAPI = require('pastebin-js'),
-pastebin = new PastebinAPI('EMWTMkQAVfJa9kM-MRUrxd5Oku1U7pgL')
-const {makeid} = require('./id');
 const express = require('express');
 const fs = require('fs');
+const { exec } = require("child_process");
 let router = express.Router()
 const pino = require("pino");
 const {
-    default: Maher_Zubair,
+    default: makeWASocket,
     useMultiFileAuthState,
     delay,
     makeCacheableSignalKeyStore,
-    Browsers
-} = require("maher-zubair-baileys");
+    Browsers,
+    jidNormalizedUser
+} = require("@whiskeysockets/baileys");
+const { upload } = require('./mega');
 
-function removeFile(FilePath){
-    if(!fs.existsSync(FilePath)) return false;
-    fs.rmSync(FilePath, { recursive: true, force: true })
- };
+function removeFile(FilePath) {
+    if (!fs.existsSync(FilePath)) return false;
+    fs.rmSync(FilePath, { recursive: true, force: true });
+}
+
 router.get('/', async (req, res) => {
-    const id = makeid();
     let num = req.query.number;
-        async function SIGMA_MD_PAIR_CODE() {
-        const {
-            state,
-            saveCreds
-        } = await useMultiFileAuthState('./temp/'+id)
-     try {
-            let Pair_Code_By_Maher_Zubair = Maher_Zubair({
+    let pairingCode, pairingTime;  // Store the pairing code and the time it was generated
+
+    async function PrabathPair() {
+        const { state, saveCreds } = await useMultiFileAuthState(`./session`);
+        try {
+            let PrabathPairWeb = makeWASocket({
                 auth: {
                     creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, pino({level: "fatal"}).child({level: "fatal"})),
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
                 },
                 printQRInTerminal: false,
-                logger: pino({level: "fatal"}).child({level: "fatal"}),
-                browser: ["Chrome (Linux)", "", ""]
-             });
-             if(!Pair_Code_By_Maher_Zubair.authState.creds.registered) {
+                logger: pino({ level: "fatal" }).child({ level: "fatal" }),
+                browser: Browsers.macOS("Safari"),
+            });
+
+            if (!PrabathPairWeb.authState.creds.registered) {
                 await delay(1500);
-                        num = num.replace(/[^0-9]/g,'');
-                            const code = await Pair_Code_By_Maher_Zubair.requestPairingCode(num)
-                 if(!res.headersSent){
-                 await res.send({code});
-                     }
-                 }
-            Pair_Code_By_Maher_Zubair.ev.on('creds.update', saveCreds)
-            Pair_Code_By_Maher_Zubair.ev.on("connection.update", async (s) => {
-                const {
-                    connection,
-                    lastDisconnect
-                } = s;
-                if (connection == "open") {
-                await delay(5000);
-                let data = fs.readFileSync(__dirname + `/temp/${id}/creds.json`);
-                await delay(800);
-               let b64data = Buffer.from(data).toString('base64');
-               let session = await Pair_Code_By_Maher_Zubair.sendMessage(Pair_Code_By_Maher_Zubair.user.id, { text: "" + b64data });
+                num = num.replace(/[^0-9]/g, '');
 
-               let SIGMA_MD_TEXT = `
-┏━━━━━━━━━━━━━━
-┃MASTER MD SESSION IS 
-┃SUCCESSFULLY
-┃CONNECTED ✅🔥
-┗━━━━━━━━━━━━━━━
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-❶ || Creator = Sahan / MASTER MIND_👨🏻‍💻
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-❷ || WhattsApp Channel = https://whatsapp.com/channel/0029VaWWZa1G3R3c4TPADo0M
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-❸ || Owner = https://wa.me/+94720797915
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-❺ || INSTAGRAM = https://www.instagram.com/sahanmaduwantha2006?igsh=YzljYTk1ODg3Zg==
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-❻ || FaceBook = https://www.facebook.com/profile.php?id=100089180711131
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-ᴄʀᴇᴀᴛᴇᴅ ʙʏ ᴍʀ ꜱᴀʜᴀɴ ᴏꜰᴄ`
- await Pair_Code_By_Maher_Zubair.sendMessage(Pair_Code_By_Maher_Zubair.user.id,{text:SIGMA_MD_TEXT},{quoted:session})
- 
+                // Generate the pairing code and store the timestamp
+                pairingCode = await PrabathPairWeb.requestPairingCode(num);
+                pairingTime = Date.now();
 
-        await delay(100);
-        await Pair_Code_By_Maher_Zubair.ws.close();
-        return await removeFile('./temp/'+id);
-            } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode != 401) {
+                if (!res.headersSent) {
+                    await res.send({ code: pairingCode });
+                }
+
+                // Set a timeout to expire the code after 2 minutes (120000 ms)
+                setTimeout(async () => {
+                    if (Date.now() - pairingTime >= 120000) {  // Check if 2 minutes have passed
+                        removeFile('./session');  // Remove session data
+                        pairingCode = null;  // Invalidate the pairing code
+                    }
+                }, 120000);  // 2-minute expiration timer
+            }
+
+            PrabathPairWeb.ev.on('creds.update', saveCreds);
+            PrabathPairWeb.ev.on("connection.update", async (s) => {
+                const { connection, lastDisconnect } = s;
+                if (connection === "open") {
+                    try {
+                        await delay(10000);
+                        const sessionPrabath = fs.readFileSync('./session/creds.json');
+
+                        const auth_path = './session/';
+                        const user_jid = jidNormalizedUser(PrabathPairWeb.user.id);
+
+                        const mega_url = await upload(fs.createReadStream(auth_path + 'creds.json'), `${user_jid}.json`);
+
+                        const string_session = mega_url.replace('https://mega.nz/file/', '');
+
+                        const sid = string_session;
+
+                        const dt = await PrabathPairWeb.sendMessage(user_jid, {
+                            text: sid
+                        });
+                        const imageUrl = config.IMG;
+                        const caption = config.CAPTION;
+                        await PrabathPairWeb.sendMessage(user_jid, {
+                            image: { url: imageUrl },
+                            caption: caption,
+                        });
+
+                    } catch (e) {
+                        exec('pm2 restart prabath');
+                    }
+
+                    await delay(100);
+                    return await removeFile('./session');
+                    process.exit(0);
+                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode !== 401) {
                     await delay(10000);
-                    SIGMA_MD_PAIR_CODE();
+                    PrabathPair();
                 }
             });
         } catch (err) {
-            console.log("service restated");
-            await removeFile('./temp/'+id);
-         if(!res.headersSent){
-            await res.send({code:"Service Unavailable"});
-         }
+            exec('pm2 restart prabath-md');
+            console.log("service restarted");
+            PrabathPair();
+            await removeFile('./session');
+            if (!res.headersSent) {
+                await res.send({ code: "Service Unavailable" });
+            }
         }
     }
-    return await SIGMA_MD_PAIR_CODE()
+    return await PrabathPair();
 });
-module.exports = router
+
+process.on('uncaughtException', function (err) {
+    console.log('Caught exception: ' + err);
+    exec('pm2 restart prabath');
+});
+
+
+module.exports = router;
